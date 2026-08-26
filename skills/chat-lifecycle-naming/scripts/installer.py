@@ -17,6 +17,8 @@ import tempfile
 
 
 SKILL_NAME = "chat-lifecycle-naming"
+CONFIG_DIRECTORY = "chat-lifecycle-naming"
+CONFIG_FILENAME = "config.json"
 START_MARKER = "<!-- chat-lifecycle-naming:managed:start -->"
 END_MARKER = "<!-- chat-lifecycle-naming:managed:end -->"
 MANAGED_LINES = [
@@ -140,7 +142,7 @@ def atomic_write(path: Path, data: bytes) -> None:
 
 def resolve_paths(
     args: argparse.Namespace,
-) -> tuple[Path, Path, Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path, Path, Path]:
     home = Path(args.home).expanduser().resolve() if args.home else Path.home().resolve()
     codex_home_value = args.codex_home or os.environ.get("CODEX_HOME")
     codex_home = (
@@ -156,7 +158,16 @@ def resolve_paths(
     skill_target = (home / ".agents" / "skills" / SKILL_NAME).resolve()
     agents_path = (codex_home / "AGENTS.md").resolve()
     state_path = codex_home / "state" / SKILL_NAME / "install.json"
-    return home, codex_home, source_skill, skill_target, agents_path, state_path
+    config_path = codex_home / CONFIG_DIRECTORY / CONFIG_FILENAME
+    return (
+        home,
+        codex_home,
+        source_skill,
+        skill_target,
+        agents_path,
+        state_path,
+        config_path,
+    )
 
 
 def validate_source(source_skill: Path) -> None:
@@ -240,10 +251,79 @@ def write_state(
     )
 
 
-def install(args: argparse.Namespace) -> int:
-    _, codex_home, source_skill, skill_target, agents_path, state_path = resolve_paths(
-        args
+def run_helper(
+    helper: Path,
+    config_path: Path,
+    *arguments: str,
+    interactive: bool = False,
+) -> subprocess.CompletedProcess[bytes]:
+    command = [
+        sys.executable,
+        str(helper),
+        "--config-path",
+        str(config_path),
+        *arguments,
+    ]
+    if interactive:
+        return subprocess.run(command, check=False)
+    return subprocess.run(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
     )
+
+
+def print_helper_output(result: subprocess.CompletedProcess[bytes]) -> None:
+    if result.stdout:
+        print(result.stdout.decode("utf-8"), end="")
+    if result.returncode != 0:
+        message = result.stderr.decode("utf-8", errors="replace")
+        raise ValueError(f"device configuration failed: {message.strip()}")
+
+
+def initialize_config(skill_target: Path, config_path: Path) -> None:
+    helper = skill_target / "scripts" / "chat_lifecycle.py"
+    interactive = sys.stdin.isatty()
+    result = run_helper(
+        helper,
+        config_path,
+        "config",
+        "init",
+        *(["--interactive"] if interactive else []),
+        interactive=interactive,
+    )
+    if not interactive:
+        print_helper_output(result)
+    elif result.returncode != 0:
+        raise ValueError("interactive device configuration failed")
+
+
+def config_fields(helper: Path, config_path: Path) -> dict[str, str]:
+    result = run_helper(helper, config_path, "config", "show")
+    if result.returncode != 0:
+        raise ValueError(
+            "device configuration validation failed: "
+            + result.stderr.decode("utf-8", errors="replace").strip()
+        )
+    return dict(
+        line.split("=", 1)
+        for line in result.stdout.decode("utf-8").splitlines()
+        if "=" in line
+    )
+
+
+def install(args: argparse.Namespace) -> int:
+    (
+        _,
+        codex_home,
+        source_skill,
+        skill_target,
+        agents_path,
+        state_path,
+        config_path,
+    ) = resolve_paths(args)
     validate_source(source_skill)
     current_agents = agents_path.read_bytes() if agents_path.is_file() else b""
     desired_agents = install_managed_block(current_agents)
@@ -254,6 +334,7 @@ def install(args: argparse.Namespace) -> int:
         print(f"SKILL_PATH={skill_target}")
         print(f"AGENTS_PATH={agents_path}")
         print("BACKUP_PATH=NONE")
+        initialize_config(skill_target, config_path)
         return 0
 
     agents_existed_before = agents_path.is_file()
@@ -278,11 +359,12 @@ def install(args: argparse.Namespace) -> int:
         "ROLLBACK_COMMAND="
         f'"{sys.executable}" "{installed_installer}" rollback --backup "{backup}"'
     )
+    initialize_config(skill_target, config_path)
     return 0
 
 
 def verify(args: argparse.Namespace) -> int:
-    _, _, source_skill, skill_target, agents_path, _ = resolve_paths(args)
+    _, _, source_skill, skill_target, agents_path, _, config_path = resolve_paths(args)
     validate_source(source_skill)
     if not agents_path.is_file():
         raise ValueError(f"AGENTS.md is missing: {agents_path}")
@@ -293,38 +375,50 @@ def verify(args: argparse.Namespace) -> int:
         raise ValueError("installed Skill files are missing or differ")
 
     helper = skill_target / "scripts" / "chat_lifecycle.py"
+    fields = config_fields(helper, config_path)
+    device_emoji = fields["DEVICE_EMOJI"]
     environment = os.environ.copy()
     environment["PYTHONIOENCODING"] = "gbk"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(helper),
-            "name",
-            "--state",
-            "IN_PROGRESS",
-            "--basename",
-            "测试项目｜Windows会话命名验证",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=environment,
-        check=False,
-    )
-    expected = "☀️测试项目｜Windows会话命名验证\n".encode("utf-8")
-    if result.returncode != 0 or result.stdout != expected:
-        raise ValueError(
-            "installed helper failed the CP936-parent UTF-8 smoke test: "
-            + result.stderr.decode("utf-8", errors="replace")
+    for state, lifecycle in [("IN_PROGRESS", "☀️"), ("COMPLETE", "✅️")]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(helper),
+                "--config-path",
+                str(config_path),
+                "name",
+                "--state",
+                state,
+                "--basename",
+                "测试项目｜Windows会话命名验证",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            check=False,
         )
+        expected = (
+            f"{device_emoji}{lifecycle}测试项目｜Windows会话命名验证\n"
+        ).encode("utf-8")
+        if result.returncode != 0 or result.stdout != expected:
+            raise ValueError(
+                "installed helper failed the CP936-parent UTF-8 smoke test: "
+                + result.stderr.decode("utf-8", errors="replace")
+            )
     print("VERIFY_STATUS=PASS")
     print(f"SKILL_PATH={skill_target}")
     print(f"AGENTS_PATH={agents_path}")
+    print(f"CONFIG_STATUS={fields['CONFIG_STATUS']}")
+    print(f"DEVICE_EMOJI={device_emoji}")
+    print(f"CONFIG_PATH={config_path}")
     print("CP936_UTF8_SMOKE=PASS")
     return 0
 
 
 def uninstall(args: argparse.Namespace) -> int:
-    _, _, source_skill, skill_target, agents_path, state_path = resolve_paths(args)
+    _, _, source_skill, skill_target, agents_path, state_path, config_path = resolve_paths(
+        args
+    )
     state = (
         json.loads(state_path.read_text(encoding="utf-8"))
         if state_path.is_file()
@@ -372,14 +466,22 @@ def uninstall(args: argparse.Namespace) -> int:
             pass
     if state_path.is_file() and not preserved_modified:
         state_path.unlink()
+    if args.purge_config and config_path.is_file():
+        config_path.unlink()
+        try:
+            config_path.parent.rmdir()
+        except OSError:
+            pass
     status = "PARTIAL" if preserved_modified else "PASS"
     print(f"UNINSTALL_STATUS={status}")
     print(f"PRESERVED_MODIFIED_FILES={len(preserved_modified)}")
+    print(f"CONFIG_PRESERVED={'NO' if args.purge_config else 'YES'}")
+    print(f"CONFIG_PATH={config_path}")
     return 0
 
 
 def rollback(args: argparse.Namespace) -> int:
-    _, _, _, skill_target, agents_path, state_path = resolve_paths(args)
+    _, _, _, skill_target, agents_path, state_path, _ = resolve_paths(args)
     if not args.backup:
         raise ValueError("rollback requires --backup")
     backup = Path(args.backup).expanduser().resolve()
@@ -418,9 +520,16 @@ def build_parser() -> argparse.ArgumentParser:
         description="Install, verify, uninstall, or roll back chat-lifecycle-naming."
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("install", "verify", "uninstall"):
+    for name in ("install", "verify"):
         command = commands.add_parser(name)
         add_common_arguments(command)
+    uninstall_parser = commands.add_parser("uninstall")
+    add_common_arguments(uninstall_parser)
+    uninstall_parser.add_argument(
+        "--purge-config",
+        action="store_true",
+        help="explicitly remove the otherwise preserved per-machine config",
+    )
     rollback_parser = commands.add_parser("rollback")
     add_common_arguments(rollback_parser)
     rollback_parser.add_argument("--backup", required=True)

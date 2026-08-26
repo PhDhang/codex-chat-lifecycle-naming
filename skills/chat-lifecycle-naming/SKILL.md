@@ -7,7 +7,8 @@ reads: [AGENTS.md]
 
 # Chat Lifecycle Naming
 
-Keep one stable basename per stage and change only its exact lifecycle prefix.
+Keep one stable basename per stage. An optional machine-local device marker may
+precede—but never replace—the exact lifecycle prefix.
 
 ## When to Use
 
@@ -30,13 +31,14 @@ Keep one stable basename per stage and change only its exact lifecycle prefix.
 ## Workflow
 
 1. Derive `项目或对象｜本阶段核心目标` from the first effective task description. Aim for about 12–30 Chinese characters. Do not use `新任务`, `继续工作`, `修改代码`, `问题处理`, or `项目开发` as either title part.
-2. Select an available Python 3 command: on Windows prefer `py -3`, then `python`; on macOS/Linux prefer `python3`, then `python`. From this Skill directory, run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'`. The helper removes all leading `☀️`, `✅️`, `🚦`, and `🚥` markers and returns exactly one `☀️` prefix.
-3. In Codex App, call native `set_thread_title` for the current task, then read back the task list or native title state and confirm the exact value. Never mass-rename historical tasks.
-4. If the native tool is missing, errors, times out, or readback differs, put `建议任务名：☀️<basename>` at the top of the first response and tell the user to run `/rename ☀️<basename>`. Report `SEMI_AUTO`, never an automatic rename.
-5. At the stage boundary, inspect actual evidence before declaring a status. The helper validates declared fields; it never decides whether work is complete and never renames a task.
-6. For an incomplete stage, run `python3 scripts/chat_lifecycle.py block --phase-status IN_PROGRESS --basename '<basename>' --blockers '<blocker-or-NONE>' --next-action '<next action>'` and keep or restore `☀️<basename>`.
-7. For a closed stage, run `python3 scripts/chat_lifecycle.py block --phase-status COMPLETE --basename '<basename>' --acceptance PASS --blockers NONE`. Only after the evidence gate passes, call `set_thread_title` with `✅️<basename>` and read back the exact title.
-8. If completion rename or readback fails, put `建议改名：✅️<basename>` at the top and tell the user to run `/rename ✅️<basename>`; keep the implementation classification at `SEMI_AUTO`.
+2. Select an available Python 3 command: on Windows prefer `py -3`, then `python`; on macOS/Linux prefer `python3`, then `python`. Run `<python> scripts/chat_lifecycle.py config show`. Configuration lives at `${CODEX_HOME:-$HOME/.codex}/chat-lifecycle-naming/config.json` (the equivalent Codex home on Windows), never in the repository.
+3. If the result is `CONFIG_STATUS=UNINITIALIZED`, ask once in an interactive Codex session whether to keep the default empty device marker or set a short Unicode marker. Save the answer with `config reset` or `config set --device-emoji '<marker>'`. In unattended work, do not block or write a config; use the empty marker and preserve legacy titles.
+4. Run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'`. The helper removes the current configured device marker plus all leading `☀️`, `✅️`, `🚦`, and `🚥` markers. It returns `[device marker]☀️<basename>`; with the empty default it returns the byte-compatible `☀️<basename>`.
+5. In Codex App, call native `set_thread_title` for the current task, then read back the task list or native title state and confirm the exact value. Never mass-rename historical tasks.
+6. If the native tool is missing, errors, times out, or readback differs, put the exact generated title in the suggestion and tell the user to run `/rename <generated-title>`. Report `SEMI_AUTO`, never an automatic rename.
+7. At the stage boundary, inspect actual evidence before declaring a status. The helper validates declared fields; it never decides whether work is complete and never renames a task.
+8. For an incomplete stage, run `<python> scripts/chat_lifecycle.py block --phase-status IN_PROGRESS --basename '<basename>' --blockers '<blocker-or-NONE>' --next-action '<next action>'`. Then run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'` and keep that exact title.
+9. For a closed stage, run `<python> scripts/chat_lifecycle.py block --phase-status COMPLETE --basename '<basename>' --acceptance PASS --blockers NONE`. Only after the evidence gate passes, run `<python> scripts/chat_lifecycle.py name --state COMPLETE --basename '<basename>'`, use that exact title with the same device marker and `✅️`, then read back the native title.
 
 ## Decision Gates
 
@@ -79,13 +81,16 @@ BLOCKERS=NONE
 - The normalization helper only validates text and declared gate fields; it cannot infer acceptance or prove a native rename.
 - Claim an automatic rename only after exact native title readback. A suggested title or a successful helper run is insufficient.
 - Keep the basename stable. Only a substantive objective change may justify a new stage, normally in a new task.
+- A device marker change never changes the basename or lifecycle state. When the user explicitly changes it during the current task, rename only that current task and require the same native readback or `/rename` fallback. Never mass-rename historical tasks.
 
 ## Frameworks and Best Practices
 
 - Use exactly two states: `☀️` for in progress and `✅️` for closed.
 - Normalize repeated or mixed leading markers idempotently before applying the requested state.
-- Keep the production chain minimal: user-level `AGENTS.md` triggers this Skill; the Skill prefers native `set_thread_title`; the script remains an offline, non-resident pure helper.
+- Treat the title as `optional device marker + required lifecycle marker + basename`. Strip only the configured device marker; never guess arbitrary emoji or remove a normal basename character.
+- Keep the production chain minimal: user-level `AGENTS.md` triggers this Skill; the Skill prefers native `set_thread_title`; the script remains offline and non-resident, with pure normalization/gate functions and only local config I/O.
 - On Windows, install with `scripts/install_windows.ps1`. It writes one idempotent managed block to `$CODEX_HOME/AGENTS.md`, or to the default `.codex/AGENTS.md` when `CODEX_HOME` is unset, while the Skill itself remains under `.agents/skills/chat-lifecycle-naming`.
+- Installation preserves an existing per-device config. Normal uninstall also preserves it; only the explicit purge option removes it.
 - Preserve unrelated user and project instructions; lifecycle naming is orthogonal to task execution.
 
 ## Failure Modes
