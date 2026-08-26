@@ -16,6 +16,15 @@ _LEADING_PREFIXES = re.compile(rf"^(?:\s*{_PREFIX_TOKEN})+\s*")
 _VAGUE = {"新任务", "继续工作", "修改代码", "问题处理", "项目开发"}
 
 
+def configure_utf8_stdio() -> None:
+    """Make CLI output deterministic when a parent process advertises CP936/GBK."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
+
 @dataclass(frozen=True)
 class GateDecision:
     phase_status: str
@@ -128,6 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     args = build_parser().parse_args(argv)
     try:
         if args.command == "name":

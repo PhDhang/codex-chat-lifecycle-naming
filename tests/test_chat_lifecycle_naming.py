@@ -1,5 +1,7 @@
 import importlib.util
+import os
 import pathlib
+import subprocess
 import sys
 import unittest
 
@@ -115,6 +117,30 @@ class ChatLifecycleAcceptanceTests(unittest.TestCase):
             "Never mass-rename historical tasks",
         ]:
             self.assertIn(required, skill_text)
+
+    def test_F_cli_emits_utf8_when_parent_stdout_is_gbk(self):
+        environment = os.environ.copy()
+        environment["PYTHONIOENCODING"] = "gbk"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(HELPER),
+                "name",
+                "--state",
+                "IN_PROGRESS",
+                "--basename",
+                "测试项目｜Windows会话命名验证",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode("ascii"))
+        self.assertEqual(
+            result.stdout.decode("utf-8"),
+            "☀️测试项目｜Windows会话命名验证\n",
+        )
 
 
 if __name__ == "__main__":

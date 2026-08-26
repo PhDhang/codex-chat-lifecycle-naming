@@ -30,7 +30,7 @@ Keep one stable basename per stage and change only its exact lifecycle prefix.
 ## Workflow
 
 1. Derive `项目或对象｜本阶段核心目标` from the first effective task description. Aim for about 12–30 Chinese characters. Do not use `新任务`, `继续工作`, `修改代码`, `问题处理`, or `项目开发` as either title part.
-2. From this Skill directory, run `python3 scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'`. The helper removes all leading `☀️`, `✅️`, `🚦`, and `🚥` markers and returns exactly one `☀️` prefix.
+2. Select an available Python 3 command: on Windows prefer `py -3`, then `python`; on macOS/Linux prefer `python3`, then `python`. From this Skill directory, run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'`. The helper removes all leading `☀️`, `✅️`, `🚦`, and `🚥` markers and returns exactly one `☀️` prefix.
 3. In Codex App, call native `set_thread_title` for the current task, then read back the task list or native title state and confirm the exact value. Never mass-rename historical tasks.
 4. If the native tool is missing, errors, times out, or readback differs, put `建议任务名：☀️<basename>` at the top of the first response and tell the user to run `/rename ☀️<basename>`. Report `SEMI_AUTO`, never an automatic rename.
 5. At the stage boundary, inspect actual evidence before declaring a status. The helper validates declared fields; it never decides whether work is complete and never renames a task.
@@ -85,6 +85,7 @@ BLOCKERS=NONE
 - Use exactly two states: `☀️` for in progress and `✅️` for closed.
 - Normalize repeated or mixed leading markers idempotently before applying the requested state.
 - Keep the production chain minimal: user-level `AGENTS.md` triggers this Skill; the Skill prefers native `set_thread_title`; the script remains an offline, non-resident pure helper.
+- On Windows, install with `scripts/install_windows.ps1`. It writes one idempotent managed block to `$CODEX_HOME/AGENTS.md`, or to the default `.codex/AGENTS.md` when `CODEX_HOME` is unset, while the Skill itself remains under `.agents/skills/chat-lifecycle-naming`.
 - Preserve unrelated user and project instructions; lifecycle naming is orthogonal to task execution.
 
 ## Failure Modes
