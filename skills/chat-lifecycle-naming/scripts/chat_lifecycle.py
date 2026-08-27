@@ -26,12 +26,15 @@ MAX_DEVICE_MARKER_CODEPOINTS = 16
 
 
 def configure_utf8_stdio() -> None:
-    """Make CLI output deterministic when a parent process advertises CP936/GBK."""
+    """Use UTF-8 streams and canonical LF output across supported platforms."""
+    reconfigure_stdin = getattr(sys.stdin, "reconfigure", None)
+    if callable(reconfigure_stdin):
+        reconfigure_stdin(encoding="utf-8", errors="strict", newline=None)
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name)
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
-            reconfigure(encoding="utf-8")
+            reconfigure(encoding="utf-8", errors="strict", newline="\n")
 
 
 @dataclass(frozen=True)

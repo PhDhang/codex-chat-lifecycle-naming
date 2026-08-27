@@ -3,6 +3,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -119,28 +120,43 @@ class ChatLifecycleAcceptanceTests(unittest.TestCase):
             self.assertIn(required, skill_text)
 
     def test_F_cli_emits_utf8_when_parent_stdout_is_gbk(self):
-        environment = os.environ.copy()
-        environment["PYTHONIOENCODING"] = "gbk"
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(HELPER),
-                "name",
-                "--state",
-                "IN_PROGRESS",
-                "--basename",
-                "测试项目｜Windows会话命名验证",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=environment,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr.decode("ascii"))
-        self.assertEqual(
-            result.stdout.decode("utf-8"),
-            "☀️测试项目｜Windows会话命名验证\n",
-        )
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = pathlib.Path(temp_directory)
+            real_config = (
+                root / "real-codex" / "chat-lifecycle-naming" / "config.json"
+            )
+            real_config.parent.mkdir(parents=True)
+            real_config.write_text(
+                '{"schema_version": 1, "device_emoji": "🪟"}\n',
+                encoding="utf-8",
+            )
+            isolated_config = root / "isolated" / "config.json"
+            environment = os.environ.copy()
+            environment["PYTHONIOENCODING"] = "gbk"
+            environment["CODEX_HOME"] = str(root / "real-codex")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(HELPER),
+                    "--config-path",
+                    str(isolated_config),
+                    "name",
+                    "--state",
+                    "IN_PROGRESS",
+                    "--basename",
+                    "测试项目｜Windows会话命名验证",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=environment,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr.decode("ascii"))
+            self.assertEqual(
+                result.stdout,
+                "☀️测试项目｜Windows会话命名验证\n".encode("utf-8"),
+            )
+            self.assertFalse(isolated_config.exists())
 
 
 if __name__ == "__main__":

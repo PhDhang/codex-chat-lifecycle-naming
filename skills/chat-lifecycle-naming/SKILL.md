@@ -90,6 +90,7 @@ BLOCKERS=NONE
 - Treat the title as `optional device marker + required lifecycle marker + basename`. Strip only the configured device marker; never guess arbitrary emoji or remove a normal basename character.
 - Keep the production chain minimal: user-level `AGENTS.md` triggers this Skill; the Skill prefers native `set_thread_title`; the script remains offline and non-resident, with pure normalization/gate functions and only local config I/O.
 - On Windows, install with `scripts/install_windows.ps1`. It writes one idempotent managed block to `$CODEX_HOME/AGENTS.md`, or to the default `.codex/AGENTS.md` when `CODEX_HOME` is unset, while the Skill itself remains under `.agents/skills/chat-lifecycle-naming`.
+- The installer is non-interactive by default and leaves a missing config as `CONFIG_STATUS=UNINITIALIZED`. Only the explicit Windows `-InteractiveConfig` option may prompt during installation; otherwise the interactive Codex first-use flow in step 3 owns initialization.
 - Installation preserves an existing per-device config. Normal uninstall also preserves it; only the explicit purge option removes it.
 - Preserve unrelated user and project instructions; lifecycle naming is orthogonal to task execution.
 

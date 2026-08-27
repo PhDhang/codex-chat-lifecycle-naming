@@ -58,10 +58,10 @@ is stored.
 ## First-time setup
 
 An existing config is preserved without prompting. A missing config reports
-`CONFIG_STATUS=UNINITIALIZED`. Interactive first installation offers default or
-custom identity once; unattended installation never blocks and continues with
-the empty marker without creating a config. The next interactive Codex use can
-initialize it.
+`CONFIG_STATUS=UNINITIALIZED`. The installer is non-interactive by default: it
+never reads stdin, never creates a missing config, and never blocks unattended
+installation, verification, reinstall, or upgrade. The next interactive Codex
+use can initialize the marker through the Skill workflow.
 
 From an installed Skill, inspect the effective configuration:
 
@@ -116,6 +116,15 @@ From the cloned repository in Windows PowerShell 5.1 or PowerShell 7:
 & .\skills\chat-lifecycle-naming\scripts\install_windows.ps1
 & .\skills\chat-lifecycle-naming\scripts\verify_windows.ps1
 ```
+
+Only an explicit opt-in may prompt during installation:
+
+```powershell
+& .\skills\chat-lifecycle-naming\scripts\install_windows.ps1 -InteractiveConfig
+```
+
+Without `-InteractiveConfig`, a missing config remains
+`CONFIG_STATUS=UNINITIALIZED`.
 
 The launcher discovers `py -3` first and then `python`; it does not assume `python3.exe`. The installer uses these locations:
 

@@ -34,12 +34,15 @@ MANAGED_LINES = [
 
 
 def configure_utf8_stdio() -> None:
-    """Keep status output readable under Windows CP936/GBK parents."""
+    """Use UTF-8 streams and canonical LF output across supported platforms."""
+    reconfigure_stdin = getattr(sys.stdin, "reconfigure", None)
+    if callable(reconfigure_stdin):
+        reconfigure_stdin(encoding="utf-8", errors="strict", newline=None)
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name)
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
-            reconfigure(encoding="utf-8")
+            reconfigure(encoding="utf-8", errors="strict", newline="\n")
 
 
 def sha256(path: Path) -> str:
@@ -283,9 +286,10 @@ def print_helper_output(result: subprocess.CompletedProcess[bytes]) -> None:
         raise ValueError(f"device configuration failed: {message.strip()}")
 
 
-def initialize_config(skill_target: Path, config_path: Path) -> None:
+def initialize_config(
+    skill_target: Path, config_path: Path, *, interactive: bool
+) -> None:
     helper = skill_target / "scripts" / "chat_lifecycle.py"
-    interactive = sys.stdin.isatty()
     result = run_helper(
         helper,
         config_path,
@@ -334,7 +338,9 @@ def install(args: argparse.Namespace) -> int:
         print(f"SKILL_PATH={skill_target}")
         print(f"AGENTS_PATH={agents_path}")
         print("BACKUP_PATH=NONE")
-        initialize_config(skill_target, config_path)
+        initialize_config(
+            skill_target, config_path, interactive=args.interactive_config
+        )
         return 0
 
     agents_existed_before = agents_path.is_file()
@@ -359,7 +365,7 @@ def install(args: argparse.Namespace) -> int:
         "ROLLBACK_COMMAND="
         f'"{sys.executable}" "{installed_installer}" rollback --backup "{backup}"'
     )
-    initialize_config(skill_target, config_path)
+    initialize_config(skill_target, config_path, interactive=args.interactive_config)
     return 0
 
 
@@ -520,9 +526,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Install, verify, uninstall, or roll back chat-lifecycle-naming."
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("install", "verify"):
-        command = commands.add_parser(name)
-        add_common_arguments(command)
+    install_parser = commands.add_parser("install")
+    add_common_arguments(install_parser)
+    install_parser.add_argument(
+        "--interactive-config",
+        action="store_true",
+        help="explicitly prompt for the optional per-machine device marker",
+    )
+    verify_parser = commands.add_parser("verify")
+    add_common_arguments(verify_parser)
     uninstall_parser = commands.add_parser("uninstall")
     add_common_arguments(uninstall_parser)
     uninstall_parser.add_argument(

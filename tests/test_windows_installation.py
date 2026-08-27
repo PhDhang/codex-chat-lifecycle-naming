@@ -251,12 +251,18 @@ class WindowsInstallationAcceptanceTests(unittest.TestCase):
             self.assertIn("windows_python.ps1", text)
             self.assertIn(f'-Action "{action}"', text)
             self.assertNotIn("C:\\Users\\", text)
+        install = (SCRIPT_ROOT / "install_windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("[switch] $InteractiveConfig", install)
+        self.assertIn('if ($InteractiveConfig)', install)
+        self.assertIn('"--interactive-config"', install)
 
     def test_windows_install_verify_uninstall_and_retest_contract_is_documented(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         skill = (SKILL_SOURCE / "SKILL.md").read_text(encoding="utf-8")
         for required in [
             "install_windows.ps1",
+            "-InteractiveConfig",
+            "non-interactive by default",
             "verify_windows.ps1",
             "uninstall_windows.ps1",
             "rollback_windows.ps1",
@@ -266,7 +272,14 @@ class WindowsInstallationAcceptanceTests(unittest.TestCase):
             "requires real Windows Codex smoke test",
         ]:
             self.assertIn(required, readme)
-        for required in ["py -3", "python3", "CODEX_HOME", "managed block"]:
+        for required in [
+            "py -3",
+            "python3",
+            "CODEX_HOME",
+            "managed block",
+            "non-interactive by default",
+            "-InteractiveConfig",
+        ]:
             self.assertIn(required, skill)
 
 

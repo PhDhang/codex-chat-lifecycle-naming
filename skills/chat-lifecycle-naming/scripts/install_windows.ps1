@@ -2,7 +2,8 @@
 param(
     [string] $CodexHome,
     [string] $HomePath,
-    [string] $SourceSkill
+    [string] $SourceSkill,
+    [switch] $InteractiveConfig
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,4 +12,5 @@ $arguments = @()
 if ($CodexHome) { $arguments += @("--codex-home", $CodexHome) }
 if ($HomePath) { $arguments += @("--home", $HomePath) }
 if ($SourceSkill) { $arguments += @("--source-skill", $SourceSkill) }
+if ($InteractiveConfig) { $arguments += "--interactive-config" }
 Invoke-LifecycleInstaller -Action "install" -InstallerArguments $arguments
