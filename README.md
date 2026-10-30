@@ -30,7 +30,34 @@ metadata. The same Skill code can therefore produce `☀️...` on an unconfigur
 machine or a two-layer title such as `🍎☀️...` after the user chooses a marker.
 The Skill only recognizes the currently configured device marker plus the
 supported lifecycle and legacy markers; it never guesses arbitrary emoji at the
-start of a basename and never mass-renames historical tasks.
+start of a basename. Historical cleanup requires an explicit user request and the evidence/readback workflow in SKILL.md; the helper itself never renames tasks.
+
+## Cloud naming and historical cleanup
+
+Use `☁️☀️项目｜阶段目标` for an in-progress cloud task and
+`☁️✅️项目｜阶段目标` only after the completion gate passes.
+🍎 and 🪟 identify Mac and Windows execution respectively; preserve existing
+user-selected markers. The marker describes execution location, not the device
+used to view a chat.
+
+For an explicitly chosen cloud marker, the existing helper supports:
+
+```bash
+python3 skills/chat-lifecycle-naming/scripts/chat_lifecycle.py config set --device-emoji "☁️"
+```
+
+This is an explicit configuration operation, not a new installer default.
+Local device settings and existing installation behavior are preserved.
+
+Historical cleanup is an agent workflow: enumerate conversations, read closure
+evidence, preserve basenames, prepare old/new mappings, change through an
+available authorized title tool or UI, and verify each exact title. Unknown
+status stays in progress. No batch rename API or browser controller is bundled.
+
+Installing the skill does not grant access to ChatGPT's sidebar. A user may be
+logged in while the agent has no connection to that tab. Without a usable title
+operation, provide suggestions and report `SEMI_AUTO`; do not claim a rename or
+assume ChatGPT supports `/rename`. Saving rules here is not a long-term Memory write.
 
 ## Config location
 
