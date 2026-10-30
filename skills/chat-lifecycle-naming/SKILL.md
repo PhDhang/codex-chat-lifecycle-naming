@@ -1,6 +1,6 @@
 ---
 name: chat-lifecycle-naming
-description: Use when a new independent Codex task, work package, or project stage starts, when a stage ends, or when deciding whether a task title may change from in progress to closed.
+description: Use for ChatGPT cloud and Codex task lifecycle naming, environment markers, stage closure, and explicitly requested historical conversation title cleanup.
 related: [verification-before-completion]
 reads: [AGENTS.md]
 ---
@@ -20,7 +20,7 @@ precede—but never replace—the exact lifecycle prefix.
 
 - The user is continuing the same stage with only minor wording changes.
 - A new independent work package should receive its own task instead of replacing an unrelated basename.
-- Historical tasks are being considered for bulk cleanup; this Skill only handles the current and future tasks.
+- Historical cleanup without an explicit user request.
 
 ## Context Required
 
@@ -34,8 +34,8 @@ precede—but never replace—the exact lifecycle prefix.
 2. Select an available Python 3 command: on Windows prefer `py -3`, then `python`; on macOS/Linux prefer `python3`, then `python`. Run `<python> scripts/chat_lifecycle.py config show`. Configuration lives at `${CODEX_HOME:-$HOME/.codex}/chat-lifecycle-naming/config.json` (the equivalent Codex home on Windows), never in the repository.
 3. If the result is `CONFIG_STATUS=UNINITIALIZED`, ask once in an interactive Codex session whether to keep the default empty device marker or set a short Unicode marker. Save the answer with `config reset` or `config set --device-emoji '<marker>'`. In unattended work, do not block or write a config; use the empty marker and preserve legacy titles.
 4. Run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'`. The helper removes the current configured device marker plus all leading `☀️`, `✅️`, `🚦`, and `🚥` markers. It returns `[device marker]☀️<basename>`; with the empty default it returns the byte-compatible `☀️<basename>`.
-5. In Codex App, call native `set_thread_title` for the current task, then read back the task list or native title state and confirm the exact value. Never mass-rename historical tasks.
-6. If the native tool is missing, errors, times out, or readback differs, put the exact generated title in the suggestion and tell the user to run `/rename <generated-title>`. Report `SEMI_AUTO`, never an automatic rename.
+5. In Codex App, discover whether native `set_thread_title` is available before calling it for the current task, then read back the task list or native title state and confirm the exact value. For explicitly requested historical cleanup, follow the batch workflow below.
+6. If the native tool is missing, errors, times out, or readback differs, provide the exact proposed title for manual editing. Recommend `/rename <generated-title>` only when the current client is verified to support it. Report `SEMI_AUTO`, never an automatic rename.
 7. At the stage boundary, inspect actual evidence before declaring a status. The helper validates declared fields; it never decides whether work is complete and never renames a task.
 8. For an incomplete stage, run `<python> scripts/chat_lifecycle.py block --phase-status IN_PROGRESS --basename '<basename>' --blockers '<blocker-or-NONE>' --next-action '<next action>'`. Then run `<python> scripts/chat_lifecycle.py name --state IN_PROGRESS --basename '<basename>'` and keep that exact title.
 9. For a closed stage, run `<python> scripts/chat_lifecycle.py block --phase-status COMPLETE --basename '<basename>' --acceptance PASS --blockers NONE`. Only after the evidence gate passes, run `<python> scripts/chat_lifecycle.py name --state COMPLETE --basename '<basename>'`, use that exact title with the same device marker and `✅️`, then read back the native title.
@@ -81,7 +81,7 @@ BLOCKERS=NONE
 - The normalization helper only validates text and declared gate fields; it cannot infer acceptance or prove a native rename.
 - Claim an automatic rename only after exact native title readback. A suggested title or a successful helper run is insufficient.
 - Keep the basename stable. Only a substantive objective change may justify a new stage, normally in a new task.
-- A device marker change never changes the basename or lifecycle state. When the user explicitly changes it during the current task, rename only that current task and require the same native readback or `/rename` fallback. Never mass-rename historical tasks.
+- A device marker change never changes the basename or lifecycle state. When the user explicitly changes it during the current task, rename only that current task and require the same native readback or `/rename` fallback. For explicitly requested historical cleanup, follow the batch workflow below.
 
 ## Frameworks and Best Practices
 
@@ -113,3 +113,27 @@ Start: `Hermes修复｜微信投递可靠性` becomes `☀️Hermes修复｜微�
 Close: only after all gates pass, `☀️Hermes修复｜微信投递可靠性` becomes `✅️Hermes修复｜微信投递可靠性`; the basename remains byte-for-byte unchanged.
 
 Normalize: `✅️☀️🚥测试项目｜会话命名验证` becomes `☀️测试项目｜会话命名验证` for an in-progress stage or `✅️测试项目｜会话命名验证` for a closed stage.
+
+## Cloud and execution-environment rules
+
+- Format new titles as `环境标识 + ☀️/✅️ + 项目或对象｜本阶段核心目标`.
+- Use ☁️ for established cloud execution, 🍎 for established Mac execution, and 🪟 for established Windows execution. Preserve an existing user-selected marker.
+- Identify the task execution environment, not the device viewing the conversation. Do not infer it from browser user-agent, Linux alone, or presence in a sidebar.
+- When the user has chosen ☁️ for a cloud environment, use the existing helper's `config set --device-emoji '☁️'` in that environment. Do not overwrite unrelated local-device configuration. Installers retain their existing non-interactive behavior and empty-marker default.
+- An isolated cloud deployment may use `--config-path <deployment-config.json>` before the helper subcommand. Keep runtime configuration outside this source repository; a packaged cloud skill may provide its own explicit default.
+- Discover actual title tools or an authorized browser UI before attempting a rename. Installing this skill does not grant title API access or browser control.
+- User login and agent access to the user's tab are distinct. An empty tool-visible tab list does not mean the user is logged out. Report the missing connection accurately; do not request another login without observing a sign-in wall.
+- In ChatGPT, never assume `/rename` is supported. Without a usable title operation, report `SEMI_AUTO` and provide proposed titles, not a success claim.
+- Persisting these rules in a skill or repository is not a ChatGPT long-term Memory write. Claim a Memory update only after a supported write succeeds.
+
+## Explicit historical batch workflow
+
+1. Confirm scope from the user's explicit request. Existing authorization in the conversation remains valid; do not ask again for the same scope.
+2. Enumerate accessible conversations with stable identifiers, current titles, and known execution environments. Disclose incomplete coverage; memory summaries are not a complete inventory.
+3. Read each conversation's closing evidence and apply all six completion gates above. Unknown or insufficient evidence stays ☀️, with uncertainty recorded. Age or generated files alone do not prove closure.
+4. Prepare an old/new title mapping. Preserve each existing basename exactly, including titles without `｜`. The helper requires `｜` for new titles, so do not force legacy titles through it or silently rewrite their subjects.
+5. Preserve known environment markers. Apply ☁️ only to established cloud tasks; do not relabel every visible conversation as cloud. Strip only known lifecycle markers and an explicitly identified environment marker; never arbitrary emoji.
+6. Use an available authorized native tool or browser UI to change titles. Record exact readback per conversation and distinguish successful, failed, skipped, and unverified items. If a write's result is uncertain, inspect before retrying.
+7. If mutation capability is absent, stop at proposed mappings and state that zero titles were changed. Skill installation and title generation never count as actual renaming.
+
+Examples: `☁️☀️会话命名｜云端规则适配`, `🍎☀️仿真工具｜本地调试`, `🪟✅️测试平台｜阶段验收`. Completion examples apply only after the evidence gate passes.
